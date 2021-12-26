@@ -60,14 +60,13 @@ class Color(namedtuple('Color', 'r g b a')):
         return Color(self.r, self.g, self.b, int(a))
 
     def blend(self, other):
-        """Blending another color on top of this"""
+        """Blending another color on top of this using alpha compositioning"""
 
-        a1 = self.a / OPAQUE
-        a2 = other.a / OPAQUE
-        # The relationship between a1 and a2; 1:1 = 0.5; 1:0 = 0
-        median_opacity = (a2 + 1 - a1) / 2
-        rbg = (self[i] + (other[i] - self[i]) * median_opacity for i in range(3))
-        return Color(*rbg, min(self.a + other.a, OPAQUE))
+        a1 = other.a / 255
+        a2 = self.a / 255
+        ao = a1 + a2 * (1 - a1)
+        rbg = ((other[c] * a1 + self[c] * a2 * (1 - a1)) / ao for c in range(3))
+        return Color(*rbg, ao * 255)
 
 
 # Represents a MIDI note
