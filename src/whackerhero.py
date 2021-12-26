@@ -152,27 +152,6 @@ class AntialiasedDraw:
         else:
             self.over(outer_top, outer_bottom, left, right, color.opacity(min(1, top_alpha + bottom_alpha) * color.a))
 
-    def compose(self, nsrc, ndst):
-        """Draw a transparent color over a part of the image"""
-
-        # Extract the RGB channels
-        srcRGB = nsrc[..., :3]
-        dstRGB = ndst[..., :3]
-
-        # Extract the alpha channels and normalise to range 0..1
-        srcA = nsrc[..., 3] / 255.0
-        dstA = ndst[..., 3] / 255.0
-
-        # Work out resultant alpha channel
-        outA = srcA + dstA * (1 - srcA)
-
-        # Work out resultant RGB
-        outRGB = (srcRGB * srcA[..., np.newaxis] + dstRGB * dstA[..., np.newaxis] * (1 - srcA[..., np.newaxis])) / outA[
-            ..., np.newaxis]
-
-        # Merge RGB and alpha (scaled back up to 0..255) back into single image
-        return np.dstack((outRGB, outA * 255)).astype(np.uint8)
-
     def over(self, top, bottom, left, right, color):
         """Draw a transparent color over a part of the image"""
 
@@ -444,7 +423,7 @@ def main(parser=None):
 
     # Add background image
     elif options.image:
-        video_stack.append(ImageClip(options.image, duration=duration))
+        bg = ImageClip(options.image, duration=duration)
 
     if bg:
         bg = bg.set_position(('center', 'center')).set_opacity(options.opacity / 100)
@@ -468,7 +447,12 @@ def main(parser=None):
 
     # Start rendering
     print('Rendering frames', flush=True)
-    video.write_videofile(options.dest, fps=options.fps, logger=logger)
+    print(options.dest)
+    if options.dest.endswith('.gif'):
+        video.write_gif(options.dest, fps=options.fps, logger=logger)
+    else:
+        video.write_videofile(options.dest, fps=options.fps, logger=logger)
+
 
 
 def gui():
