@@ -79,26 +79,14 @@ class AntialiasedDraw:
     def __init__(self, arr: np.ndarray):
         self.arr = arr
 
-    def text(self, xy, text, fill=None, font=None, size=10):
+    def text(self, xy, text, fill=None, font=None):
         """Draw centered text using Pillow"""
 
-        from PIL import Image, ImageDraw, ImageFont
-
-        # Try to load fonts until it works
-        fonts = [font] if font else FONTS
-        for f in fonts:
-            try:
-                loaded_font = ImageFont.truetype(f, size=size)
-                break
-            except OSError:
-                continue
-        else:
-            print('Cannot find font, falling back to microscopic default font')
-            loaded_font = ImageFont.load_default()
+        from PIL import Image, ImageDraw
 
         image = Image.fromarray(self.arr, "RGBA")
         # Requires pillow 8.0.0 for correct anchor
-        ImageDraw.Draw(image).text([int(n) for n in xy], text, fill, loaded_font, anchor='mm')
+        ImageDraw.Draw(image).text([int(n) for n in xy], text, fill, font, anchor='mm')
         self.arr[...] = np.array(image)
 
     def vline(self, center, top, bottom, width, color: Color):
@@ -242,7 +230,22 @@ class Painter:
         draw = AntialiasedDraw(arr)
 
         # Decrease font height if columns are too narrow
-        font_size = int(min(self.column_width / 1.5, height * BOTTOM_MARGIN / 4))
+        font_size = int(min(self.column_width / 1.5, height * BOTTOM_MARGIN * FONT_HEIGHT))
+
+        # Try to load fonts until it works
+        font = None
+        if self.show_text:
+            from PIL import ImageFont
+
+            for f in [self.font] if self.font else FONTS:
+                try:
+                    font = ImageFont.truetype(f, size=font_size)
+                    break
+                except OSError:
+                    continue
+            else:
+                print('Cannot find font, falling back to microscopic default font')
+                font = ImageFont.load_default()
 
         letters = [letter for letter in KEYS.keys()]
 
@@ -361,7 +364,7 @@ def main(parser=None):
     parser.add_argument('-p', dest='test', help='Generate a preview', action='store_true')
     parser.add_argument('-s', dest='size', help='Video dimension (WIDTHxHEIGHT)', default='1280x720')
     parser.add_argument('-v', dest='video', help='Background video', widget='FileChooser')
-    parser.add_argument('--font', help='Custom font')
+    parser.add_argument('--font', help='Custom TTF font file', widget='FileChooser')
     parser.add_argument('--fps', help='Frame rate', type=int, default=30, widget='IntegerField')
     parser.add_argument('--opacity', type=int, default=30, help='Background visibility (1-100)',
                         widget='Slider')
