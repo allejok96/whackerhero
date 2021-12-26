@@ -11,6 +11,7 @@ import numpy as np
 from mido import MidiFile
 from moviepy.editor import AudioFileClip, VideoFileClip, VideoClip, CompositeVideoClip, ImageClip
 from moviepy.video.io.ffmpeg_tools import ffmpeg_resize
+from proglog import TqdmProgressBarLogger
 
 BOTTOM_MARGIN = 0.2  # of screen height
 END_TIME = 4  # sec
@@ -179,7 +180,7 @@ class Painter:
 
         # Load MIDI data
         midi = MidiFile(midifile)
-        self.duration = self.total_duration = midi.length
+        self.duration = midi.length
         total_sec = 0
         pressed_keys = {}  # {key: start_sec}
         self.notes: list[Note] = []
@@ -283,10 +284,6 @@ class Painter:
         notewidth = self.note_width
         pps = hitline / self.fall_time  # pixels per second
 
-        # Print progress percentage if running in Gooey
-        if not sys.stdout.isatty():
-            print(int(seconds / self.total_duration * 100), flush=True)
-
         arr = self.background.copy()
         draw = AntialiasedDraw(arr)
 
@@ -355,6 +352,13 @@ class GooeyCompatibleParser(argparse.ArgumentParser):
         super().add_argument(*args, **kwargs)
 
 
+class PercentageLogger(TqdmProgressBarLogger):
+    """Prints percentage instead of a progress bar (needed by Gooey to read progress)"""
+
+    def bars_callback(self, bar, attr, value, *args, **kwargs):
+        print(f'{100 * value // self.bars[bar]["total"]}', flush=True)
+
+
 def main(parser=None):
     parser = parser or GooeyCompatibleParser()
     require_ext = {'validator': {'test': '"." in user_input', 'message': 'Missing file name extension'}}
@@ -390,7 +394,6 @@ def main(parser=None):
 
     # Prepare audio (will create a temp file)
     if options.audio:
-        print('Preparing audio', flush=True)
         audio = AudioFileClip(options.audio).set_start(options.speed)
         duration = max(duration, audio.duration)
 
@@ -411,7 +414,7 @@ def main(parser=None):
             resized = f'{base}_{w}x{h}{ext}'
             if not os.path.exists(resized):
                 # Scale video and save it for future (re)use
-                print('Resizing video', flush=True)
+                print('Resizing video...', flush=True)
                 ffmpeg_resize(bg.filename, resized, (w, h))
 
             bg = VideoFileClip(resized)
@@ -443,12 +446,11 @@ def main(parser=None):
     if options.test:
         video = video.subclip(options.speed + 10, options.speed + 20)
 
-    # When running in Gooey, disable pretty progress bar and let Painter print progress
-    logger = 'bar' if sys.stdout.isatty() else None
-    painter.total_duration = duration
+    # When running in Gooey, disable pretty progress bar
+    logger = 'bar' if sys.stdout.isatty() else PercentageLogger()
 
     # Start rendering
-    print('Rendering frames', flush=True)
+    print(f'Rendering {int(video.duration * options.fps)} frames...')
     if options.dest.endswith('.gif'):
         video.write_gif(options.dest, fps=options.fps, logger=logger)
     else:
