@@ -15,7 +15,7 @@ from moviepy.video.io.ffmpeg_tools import ffmpeg_resize
 BOTTOM_MARGIN = 0.2  # of screen height
 END_TIME = 4  # sec
 FONTS = 'arial.ttf', 'DejaVuSans.ttf', 'LiberationSans-Regular.ttf'
-FONT_HEIGHT = 0.25  # of bottom area
+FONT_HEIGHT = 0.3  # of bottom area
 HIT_EFFECT_COLOR = (255, 255, 255)  # white
 HIT_EFFECT_TIME = 1  # sec
 HIT_LINE_COLOR = (255, 255, 255)  # white
@@ -179,7 +179,7 @@ class Painter:
 
         # Load MIDI data
         midi = MidiFile(midifile)
-        self.duration = midi.length
+        self.duration = self.total_duration = midi.length
         total_sec = 0
         pressed_keys = {}  # {key: start_sec}
         self.notes: list[Note] = []
@@ -285,7 +285,7 @@ class Painter:
 
         # Print progress percentage if running in Gooey
         if not sys.stdout.isatty():
-            print(int(seconds / self.duration * 100), flush=True)
+            print(int(seconds / self.total_duration * 100), flush=True)
 
         arr = self.background.copy()
         draw = AntialiasedDraw(arr)
@@ -357,6 +357,7 @@ class GooeyCompatibleParser(argparse.ArgumentParser):
 
 def main(parser=None):
     parser = parser or GooeyCompatibleParser()
+    require_ext = {'validator': {'test': '"." in user_input', 'message': 'Missing file name extension'}}
     parser.add_argument('-a', dest='audio', help='Audio track', widget='FileChooser')
     parser.add_argument('-i', dest='image', help='Background image', widget='FileChooser')
     parser.add_argument('-p', dest='test', help='Generate a preview', action='store_true')
@@ -371,9 +372,8 @@ def main(parser=None):
     parser.add_argument('--speed', help='Seconds from top to bottom', type=int, default=10,
                         widget='IntegerField')
     parser.add_argument('midi', help='Input MIDI file', widget='FileChooser')
-    parser.add_argument('dest', help='Output video file', default='output.mp4', widget='FileSaver',
-                        gooey_options={'validator': {'test': '"." in user_input',
-                                                     'message': 'Missing file name extension'}})
+    parser.add_argument('dest', help='Output video file', default=os.path.abspath('output.mp4'),
+                        gooey_options=require_ext, widget='FileSaver')
 
     options = parser.parse_args()
 
@@ -443,12 +443,12 @@ def main(parser=None):
     if options.test:
         video = video.subclip(options.speed + 10, options.speed + 20)
 
-    # When running in Gooey, disable pretty progress bar
+    # When running in Gooey, disable pretty progress bar and let Painter print progress
     logger = 'bar' if sys.stdout.isatty() else None
+    painter.total_duration = duration
 
     # Start rendering
     print('Rendering frames', flush=True)
-    print(options.dest)
     if options.dest.endswith('.gif'):
         video.write_gif(options.dest, fps=options.fps, logger=logger)
     else:
