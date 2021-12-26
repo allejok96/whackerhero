@@ -454,38 +454,36 @@ def main(parser=None):
         video.write_videofile(options.dest, fps=options.fps, logger=logger)
 
 
-
 def gui():
-    """Entry point for executable - load GUI if no arguments are specified"""
+    """Load main trough Gooey"""
 
-    if len(sys.argv) > 1:
-        main()
-        return
+    from gooey import Gooey, GooeyParser
 
-    try:
-        from gooey import Gooey, GooeyParser
+    # FIXME quoting
+    # Stupid Gooey passes a string to Popen which breaks when there is whitespace.
+    # There is no good way to quote it on Windows (subprocess does that natively).
+    # This function is copied from gooey.gui.util.quoting
+    if sys.platform.startswith("win"):
+        def quote(value):
+            return u'"{}"'.format(u'{}'.format(value).replace(u'"', u'""'))
+    else:
+        from shlex import quote
 
-        # This calls the main function through the Gooey decorator, same as:
-        # @Gooey
-        # def main(): ...
-        # main()
-        Gooey(
-            # FIXME this function cannot be run from an interactive shell
-            # When imported as a module, Gooey will run __main__.py in the WORKING DIRECTORY
-            # When running as a script, Gooey will run `python sys.argv[0]`
-            # On Windows, sys.argv[0] is perhaps an exe so that doesn't work.
-            # Therefore we must call it directly.
-            target=sys.argv[0],
-            program_name='Whacker Hero',
-            program_description='Boomwhacker play-along generator',
-            progress_regex=r'^(\d+)$',
-            hide_progress_msg=True,
-            suppress_gooey_flag=True,
-            clear_before_run=True,
-        )(main)(parser=GooeyParser())
-
-    except ImportError:
-        print('Run `pip install Gooey` to enable graphical user interface, or try `whackerhero --help`')
+    # The syntax below is is the same as:
+    # @Gooey
+    # def main(): ...
+    # main()
+    Gooey(
+        # FIXME target
+        # Gooey will run `python sys.argv[0]` to start the actual command, but when this is installed
+        # with pip on Windows sys.argv[0] is an exe, so it must be opened directly.
+        target=quote(sys.argv[0]),
+        program_name='Whacker Hero',
+        program_description='Play-along video maker',
+        progress_regex=r'^(\d+)$',
+        hide_progress_msg=True,
+        clear_before_run=True,
+    )(main)(parser=GooeyParser())
 
 
 if __name__ == '__main__':
