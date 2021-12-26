@@ -15,12 +15,12 @@ from moviepy.video.io.ffmpeg_tools import ffmpeg_resize
 BOTTOM_MARGIN = 0.2  # of screen height
 END_TIME = 4  # sec
 FONTS = 'arial.ttf', 'DejaVuSans.ttf', 'LiberationSans-Regular.ttf'
-FONT_HEIGHT = 0.4  # of bottom area
+FONT_HEIGHT = 0.25  # of bottom area
 HIT_EFFECT_COLOR = (255, 255, 255)  # white
 HIT_EFFECT_TIME = 1  # sec
 HIT_LINE_COLOR = (255, 255, 255)  # white
 LINE_OPACITY = 180  # 0 is transparent and 255 is opaque
-LINE_THICKNESS = 0.05  # of column width
+LINE_WIDTH = 0.05  # of column width
 NOTE_WIDTH = 0.3  # of column width
 SIDE_MARGIN = 0.05  # of screen width
 
@@ -206,8 +206,10 @@ class Painter:
         # Common measurements
         self.column_width = (width - width * SIDE_MARGIN * 2) / len(self.used_keys)
         self.note_width = self.column_width * NOTE_WIDTH
-        self.line_thickness = self.column_width * LINE_THICKNESS
+        self.line_width = self.column_width * LINE_WIDTH
         self.columns = [width * SIDE_MARGIN + (i + 0.5) * self.column_width for i in range(len(self.used_keys))]
+        self.fade_point = int((1 - BOTTOM_MARGIN / 2) * height)  # where note is invisible
+        self.hit_line = int((1 - BOTTOM_MARGIN) * height)
 
         # Save static parts of the drawing
         self.background = self.draw_static()
@@ -224,7 +226,9 @@ class Painter:
 
         width = self.width
         height = self.height
-        fadepoint = (1 - BOTTOM_MARGIN / 2) * height
+        hitline = self.hit_line
+        fadepoint = self.fade_point
+        linewidth = self.line_width
 
         arr = np.zeros((height, width, 4), np.uint8)
         draw = AntialiasedDraw(arr)
@@ -255,41 +259,36 @@ class Painter:
             letter = letters[key % 12]
 
             # Draw vertical key lines
-            draw.vline(x, 0, fadepoint - 1, self.line_thickness, color.opacity(LINE_OPACITY))
+            draw.vline(x, 0, fadepoint - 1, linewidth, color.opacity(LINE_OPACITY))
 
             # Draw text
             if self.show_text:
                 y = (1 - BOTTOM_MARGIN / 4) * height
-                draw.text((x, y), text=letter, fill=color, font=self.font, size=font_size)
+                draw.text((x, y), text=letter, fill=color, font=font)
 
         # Draw horizontal hit-line
-        hitline = (1 - BOTTOM_MARGIN) * height
         color = Color(*HIT_LINE_COLOR).opacity(LINE_OPACITY)
-        draw.hline(hitline, 0, width, self.line_thickness, color)
+        draw.hline(hitline, 0, width, linewidth, color)
 
         return arr
 
     def draw_notes(self, seconds):
         """Generate a image for a specified time (video frame)"""
 
+        colwidth = self.column_width
+        fadepoint = self.fade_point
+        hitline = self.hit_line
+        hitpoint = hitline - self.line_width / 2  # where note touches edge
+        linewidth = self.line_width
+        notewidth = self.note_width
+        pps = hitline / self.fall_time  # pixels per second
+
         # Print progress percentage if running in Gooey
         if not sys.stdout.isatty():
             print(int(seconds / self.duration * 100), flush=True)
 
-        width = self.width
-        height = self.height
-
         arr = self.background.copy()
         draw = AntialiasedDraw(arr)
-
-        # Bottom line
-        hitline = (1 - BOTTOM_MARGIN) * height
-        # Where note edge touches hit-line
-        hitpoint = hitline - self.line_thickness / 2
-        # Pixels per second
-        pps = hitpoint / self.fall_time
-        # Where note becomes invisible
-        fadepoint = (1 - BOTTOM_MARGIN / 2) * height
 
         # Columns
         for i, x in enumerate(self.columns):
@@ -305,28 +304,27 @@ class Painter:
                 note_color = color
 
                 # Progress of hit effect, 1 = just hit, 0 = invisible
-                fadeout_stage = 1 - (bottom - hitpoint) / (HIT_EFFECT_TIME * pps)
+                hitstate = 1 - (bottom - hitpoint) / (HIT_EFFECT_TIME * pps)
+                # Make it exponential
+                hitstate = max(0, hitstate) ** 2
 
                 # Hit effect of note (color shift)
-                if 0 < fadeout_stage < 1:
-                    note_color = color.blend(Color(*HIT_EFFECT_COLOR, fadeout_stage * OPAQUE))
+                if 0 < hitstate < 1:
+                    note_color = color.blend(Color(*HIT_EFFECT_COLOR, hitstate * OPAQUE))
 
                 # Draw note (cut it at after fadeout)
                 if bottom > 0 and top < fadepoint:
-                    draw.vline(x, top, min(fadepoint, bottom), self.note_width, note_color)
+                    draw.vline(x, top, min(fadepoint, bottom), notewidth, note_color)
 
                 # Draw line effect
-                if 0 < fadeout_stage < 1:
-                    w = self.column_width - (self.column_width - self.note_width) * fadeout_stage ** 2
-                    h = self.line_thickness + 2 * self.line_thickness * fadeout_stage ** 2
-                    draw.box(x, hitline, w, h, Color(*HIT_LINE_COLOR).opacity(OPAQUE * fadeout_stage ** 2))
-
-        hitline = int(hitline)
-        fadepoint = int(fadepoint)
+                if 0 < hitstate < 1:
+                    w = colwidth - (colwidth - notewidth) * hitstate
+                    h = linewidth + 2 * linewidth * hitstate
+                    draw.box(x, hitline, w, h, Color(*HIT_LINE_COLOR).opacity(OPAQUE * hitstate))
 
         # Make everything fade out below the hit-line
-        for line in range(hitline, fadepoint):
-            alpha = int(255 * (line - hitline) / (fadepoint - hitline))
+        for line in range(int(hitline), int(fadepoint)):
+            alpha = int(OPAQUE * (line - hitline) / (fadepoint - hitline))
             arr[line, :, 3] -= np.minimum(arr[line, :, 3], alpha)
 
         if self.masked:
@@ -399,6 +397,7 @@ def main(parser=None):
     # Prepare background video
     if options.video:
         bg = VideoFileClip(options.video)
+        # Get correct size from videos that are marked as rotated
         bgw, bgh = (bg.w, bg.h) if bg.rotation % 180 == 0 else (bg.h, bg.w)
         # Scale background video proportionally so it covers the whole screen
         # On-the-fly resizing with moviepy just locked up when I've tried it...
