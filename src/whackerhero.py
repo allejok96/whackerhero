@@ -460,7 +460,11 @@ def main(parser=None):
 def gui():
     """Load main trough Gooey"""
 
-    from gooey import Gooey, GooeyParser
+    try:
+        from gooey import Gooey, GooeyParser
+    except ImportError:
+        print('Run `pip install Gooey` to enable graphical user interface, or use whackercmd instead')
+        exit(1); raise
 
     # FIXME quoting
     # Stupid Gooey passes a string to Popen which breaks when there is whitespace.
