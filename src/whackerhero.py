@@ -193,6 +193,10 @@ class Painter:
             if msg.type == 'note_on':
                 if msg.note not in pressed_keys:
                     pressed_keys[msg.note] = total_sec
+                # "note_on" with velocity == 0 is semantically equivalent to "note_off"
+                elif msg.velocity == 0:
+                    self.notes.append(Note(key=msg.note, start=pressed_keys[msg.note], stop=total_sec))
+                    del pressed_keys[msg.note]
             # Save a note when a key is released
             if msg.type == 'note_off':
                 if msg.note in pressed_keys:
