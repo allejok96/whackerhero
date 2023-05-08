@@ -189,15 +189,15 @@ class Painter:
         for msg in midi:
             # Time is reported as seconds since last message
             total_sec += msg.time
-            # Remember when a key is pressed down
-            if msg.type == 'note_on':
-                if msg.note not in pressed_keys:
-                    pressed_keys[msg.note] = total_sec
             # Save a note when a key is released
-            if msg.type == 'note_off':
+            if msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
                 if msg.note in pressed_keys:
                     self.notes.append(Note(key=msg.note, start=pressed_keys[msg.note], stop=total_sec))
                     del pressed_keys[msg.note]
+            # Remember when a key is pressed down
+            elif msg.type == 'note_on':
+                if msg.note not in pressed_keys:
+                    pressed_keys[msg.note] = total_sec
 
         # All keys that will be displayed
         self.used_keys = sorted(set(note.key for note in self.notes))
