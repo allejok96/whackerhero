@@ -1,10 +1,10 @@
-name: Publish Python packages to PyPI
+name: Publish to PyPI
 
 on: push
 
 jobs:
   build-n-publish:
-    name: Build and publish Python distributions to PyPI
+    name: Build and publish Python distributions
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -32,6 +32,7 @@ jobs:
         
     - name: Publish distribution to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      continue-on-error: yes
       with:
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
         repository-url: https://test.pypi.org/legacy/
