@@ -13,6 +13,8 @@ from moviepy.editor import AudioFileClip, VideoFileClip, VideoClip, CompositeVid
 from moviepy.video.io.ffmpeg_tools import ffmpeg_resize
 from proglog import TqdmProgressBarLogger
 
+VERSION='0.1.1'
+
 BOTTOM_MARGIN = 0.2  # of screen height
 END_TIME = 4  # sec
 FONTS = 'arial.ttf', 'DejaVuSans.ttf', 'LiberationSans-Regular.ttf'
